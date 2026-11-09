@@ -4,8 +4,11 @@
   #root{position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;transform-origin:0 0;background:#000}
   .layer{position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;transition:opacity .8s ease}
   .layer.on{opacity:1}
-  .layer img,.layer video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
-  .layer .cover{object-fit:cover}
+  .layer video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+  .layer video.cover{object-fit:cover}
+  /* images en arrière-plan : « contain / cover » fonctionne aussi sur Internet Explorer 11 et les vieilles TV */
+  .layer .pic{position:absolute;top:0;right:0;bottom:0;left:0;background:#000 no-repeat center center;background-size:contain}
+  .layer .pic.cover{background-size:cover}
   .layer iframe{width:100%;height:100%;border:0;background:#fff}
 
   /* Annonce texte */

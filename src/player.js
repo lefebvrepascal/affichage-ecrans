@@ -42,7 +42,8 @@
     const el = document.documentElement;
     if (document.fullscreenElement || document.webkitFullscreenElement) return;
     try {
-      const r = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : null;
+      const r = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen ? el.webkitRequestFullscreen()
+        : el.msRequestFullscreen ? el.msRequestFullscreen() : null;
       if (r && r.catch) r.catch(() => {});
     } catch (e) {}
   }
@@ -117,10 +118,14 @@
   function render(content) {
     const c = content;
     if (c.type === 'image') {
-      const img = document.createElement('img');
-      img.src = c.file; img.alt = ''; if (c.fit === 'cover') img.className = 'cover';
-      img.onerror = () => { clearTimeout(timer); timer = setTimeout(next, 2000); };
-      return img;
+      const pic = document.createElement('div');
+      pic.className = 'pic' + (c.fit === 'cover' ? ' cover' : '');
+      pic.setAttribute('data-src', c.file);
+      pic.style.backgroundImage = 'url("' + c.file + '")';
+      const probe = new Image();   // détecte une image introuvable pour passer à la suivante
+      probe.onerror = () => { clearTimeout(timer); timer = setTimeout(next, 2000); };
+      probe.src = c.file;
+      return pic;
     }
     if (c.type === 'video') {
       const v = document.createElement('video');
@@ -165,12 +170,14 @@
     layerIn.appendChild(el);
     layerIn.classList.add('on'); layerOut.classList.remove('on');
     front = back;
-    root.classList.toggle('full-clock', item.content.type === 'clock');
+    if (item.content.type === 'clock') root.classList.add('full-clock'); else root.classList.remove('full-clock');
     setTimeout(() => { if (front !== layerOut.id) layerOut.innerHTML = ''; }, 900);
 
     const dur = Number(item.duration) || 0;
     if (item.content.type === 'video') {
-      el.play().catch(() => { el.muted = true; el.play().catch(() => {}); });
+      // play() ne renvoie pas de promesse sur Internet Explorer 11 et les vieux navigateurs
+      const tryPlay = (onFail) => { try { const p = el.play(); if (p && p.catch) p.catch(onFail); } catch (e) { if (onFail) onFail(); } };
+      tryPlay(() => { el.muted = true; tryPlay(null); });
       if (dur > 0) timer = setTimeout(next, dur * 1000);
       else {
         el.onended = next;

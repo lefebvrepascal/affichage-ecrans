@@ -16,7 +16,7 @@ import { minify } from "terser";
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = (f) => path.join(here, "..", "src", f);
-const TARGETS = "chrome >= 38, safari >= 7, ios >= 7, android >= 4.4";
+const TARGETS = "ie >= 11, chrome >= 38, safari >= 7, ios >= 7, android >= 4.4";
 
 const css = (await postcss([autoprefixer({ overrideBrowserslist: TARGETS })])
   .process(fs.readFileSync(src("player.css"), "utf8"), { from: undefined })).css;
