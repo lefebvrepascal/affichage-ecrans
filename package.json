@@ -1,0 +1,11 @@
+{
+  "name": "affichage-ecrans",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Affichage dynamique sur écrans connectés (style OptiSigns) – à déployer sur Netlify",
+  "dependencies": {
+    "@netlify/blobs": "^10.0.0",
+    "@netlify/functions": "^5.0.0"
+  }
+}

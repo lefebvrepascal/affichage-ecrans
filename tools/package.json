@@ -1,0 +1,14 @@
+{
+  "name": "affichage-tools",
+  "private": true,
+  "description": "Outils de construction du lecteur d'écran (compatibilité navigateurs de TV)",
+  "devDependencies": {
+    "@babel/core": "7.26.0",
+    "@babel/preset-env": "7.26.0",
+    "autoprefixer": "10.4.20",
+    "postcss": "8.4.49",
+    "promise-polyfill": "8.3.0",
+    "terser": "5.37.0",
+    "whatwg-fetch": "3.6.20"
+  }
+}
