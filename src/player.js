@@ -129,7 +129,7 @@
     }
     if (c.type === 'video') {
       const v = document.createElement('video');
-      v.src = c.file; v.autoplay = true; v.playsInline = true; v.muted = c.muted !== false;
+      v.src = videoSrc(c.file); v.autoplay = true; v.playsInline = true; v.muted = c.muted !== false;
       v.setAttribute('playsinline', ''); if (v.muted) v.setAttribute('muted', '');
       if (c.fit === 'cover') v.className = 'cover';
       return v;
@@ -161,17 +161,82 @@
     const d = document.createElement('div'); return d;
   }
 
+  /* ---------- Mémoire : libération des médias, cache vidéo, rechargement de sécurité ---------- */
+  const bootedAt = Date.now();
+  const RELOAD_EVERY = 6 * 3600 * 1000;          // rechargement préventif toutes les 6 h
+  let lastReloadTry = 0;
+
+  // Vide un calque en libérant vraiment les lecteurs vidéo et les pages web (sinon la mémoire s'accumule)
+  function releaseLayer(layer) {
+    try {
+      const vids = layer.getElementsByTagName('video');
+      for (let i = vids.length - 1; i >= 0; i--) {
+        const v = vids[i];
+        try { v.onended = null; v.onerror = null; v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+      }
+      const frs = layer.getElementsByTagName('iframe');
+      for (let i = frs.length - 1; i >= 0; i--) { try { frs[i].src = 'about:blank'; } catch (e) {} }
+    } catch (e) {}
+    layer.innerHTML = '';
+  }
+
+  // Les vidéos de la playlist sont téléchargées une seule fois, puis rejouées depuis la mémoire de l'écran
+  const VIDEO_CACHE_MAX = 60 * 1024 * 1024;
+  const videoCache = {};
+  let videoQueue = Promise.resolve();
+  function syncVideoCache(list) {
+    if (PREVIEW || !window.URL || !URL.createObjectURL) return;
+    const keep = {};
+    let total = 0;
+    list.forEach(it => {
+      const c = it.content;
+      if (c.type !== 'video' || !c.file || keep[c.file]) return;
+      const size = Number(c.size) || 0;
+      if (!size || total + size > VIDEO_CACHE_MAX) return;
+      total += size; keep[c.file] = true;
+    });
+    Object.keys(videoCache).forEach(f => {
+      if (keep[f]) return;
+      if (videoCache[f].url) { try { URL.revokeObjectURL(videoCache[f].url); } catch (e) {} }
+      delete videoCache[f];
+    });
+    Object.keys(keep).forEach(f => {
+      if (videoCache[f]) return;
+      videoCache[f] = { loading: true };
+      videoQueue = videoQueue.then(() => fetch(f).then(r => {
+        if (!r.ok) throw new Error('vidéo ' + r.status);
+        return r.blob();
+      }).then(b => {
+        if (videoCache[f]) videoCache[f] = { url: URL.createObjectURL(b) };
+      }).catch(() => { delete videoCache[f]; }));
+    });
+  }
+  function videoSrc(file) { const e = videoCache[file]; return e && e.url ? e.url : file; }
+
+  function memoryHigh() {
+    try {
+      const m = window.performance && performance.memory;
+      return !!(m && m.jsHeapSizeLimit && m.usedJSHeapSize > 0.6 * m.jsHeapSizeLimit);
+    } catch (e) { return false; }
+  }
+  // Recharge la page seulement si le serveur répond : sinon l'écran resterait bloqué sur une page d'erreur
+  function safeReload() {
+    if (PREVIEW || Date.now() - lastReloadTry < 5 * 60 * 1000) return;
+    lastReloadTry = Date.now();
+    fetch('/?v=' + Date.now(), { cache: 'no-store' }).then(r => { if (r.ok) location.reload(); }).catch(() => {});
+  }
+
   function showItem(item) {
     clearTimeout(timer);
     const back = front === 'A' ? 'B' : 'A';
     const layerIn = $(back), layerOut = $(front);
-    layerIn.innerHTML = '';
+    releaseLayer(layerIn);
     const el = render(item.content);
     layerIn.appendChild(el);
     layerIn.classList.add('on'); layerOut.classList.remove('on');
     front = back;
     if (item.content.type === 'clock') root.classList.add('full-clock'); else root.classList.remove('full-clock');
-    setTimeout(() => { if (front !== layerOut.id) layerOut.innerHTML = ''; }, 900);
+    setTimeout(() => { if (front !== layerOut.id) releaseLayer(layerOut); }, 900);
 
     const dur = Number(item.duration) || 0;
     if (item.content.type === 'video') {
@@ -194,6 +259,7 @@
 
   function next() {
     clearTimeout(timer);
+    if (Date.now() - bootedAt > RELOAD_EVERY || memoryHigh()) safeReload();
     if (!items.length) return;
     const prev = idx;
     idx = (idx + 1) % items.length;
@@ -230,10 +296,11 @@
       if (it.content.type === 'slides') (it.content.slides || []).forEach(f => items.push({ duration: it.duration, content: { type: 'image', file: f, fit: it.content.fit } }));
       else items.push(it);
     });
+    syncVideoCache(items);
     idx = -1;
     clearTimeout(timer);
     if (!items.length) {
-      $('A').innerHTML = ''; $('B').innerHTML = ''; $('A').classList.remove('on'); $('B').classList.remove('on');
+      releaseLayer($('A')); releaseLayer($('B')); $('A').classList.remove('on'); $('B').classList.remove('on');
       $('idle').querySelector('.n').textContent = config.screen.name || 'Écran';
       $('idle').style.display = 'flex';
     } else {
@@ -296,7 +363,7 @@
 
   function showPair(code) {
     config = null; sig = ''; items = []; clearTimeout(timer); lastCfgStr = ''; store.set('sc_config', '');
-    $('A').innerHTML = ''; $('B').innerHTML = '';
+    releaseLayer($('A')); releaseLayer($('B'));
     $('alert').style.display = 'none'; $('idle').style.display = 'none';
     $('pair').querySelector('.code').textContent = code || '····';
     $('pair').style.display = 'flex';
@@ -308,7 +375,7 @@
     if (!cmd || last === cmd.id) return;
     store.set('sc_cmd', cmd.id);
     if (Date.now() - cmd.at > 3 * 60 * 1000) return;                         // commande trop ancienne
-    if (cmd.cmd === 'reload') location.reload();
+    if (cmd.cmd === 'reload') { lastReloadTry = 0; safeReload(); }
     if (cmd.cmd === 'identify') {
       const id = $('ident'); id.querySelector('div').textContent = (config && config.screen.name) || 'Écran';
       id.style.display = 'flex'; setTimeout(() => { id.style.display = 'none'; }, 6000);
@@ -358,9 +425,8 @@
   }
   tick();
 
-  // Rechargement de sécurité chaque nuit vers 4 h (libère la mémoire des navigateurs de TV)
-  const bootedAt = Date.now();
+  // Rechargement de sécurité chaque nuit vers 4 h, et toutes les 6 h même sans changement de contenu
   setInterval(() => {
-    if (new Date().getHours() === 4 && Date.now() - bootedAt > 2 * 3600 * 1000) location.reload();
+    if ((new Date().getHours() === 4 && Date.now() - bootedAt > 2 * 3600 * 1000) || Date.now() - bootedAt > RELOAD_EVERY + 3600 * 1000) safeReload();
   }, 10 * 60 * 1000);
 })();
