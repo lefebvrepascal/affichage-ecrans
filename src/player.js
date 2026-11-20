@@ -226,6 +226,26 @@
     fetch('/?v=' + Date.now(), { cache: 'no-store' }).then(r => { if (r.ok) location.reload(); }).catch(() => {});
   }
 
+  /* ---------- Mode « en direct » : l'écran signale ce qu'il diffuse quand la mosaïque est ouverte ---------- */
+  let itemStartedAt = 0, currentItem = null, liveOffset = 0;
+  function liveOn() {
+    const l = config && config.live;
+    return !!(l && !PREVIEW && Date.now() + liveOffset < l.until);
+  }
+  function reportNow(item, dur) {
+    if (!liveOn()) return;
+    const body = { deviceId, elapsed: item ? Date.now() - itemStartedAt : 0, state: item ? 'play' : 'idle' };
+    if (item) {
+      body.contentId = item.parentId || (item.content && item.content.id) || '';
+      body.duration = dur != null ? dur : Number(item.duration) || 0;
+      if (item.slide != null) { body.slide = item.slide; body.slides = item.slides; }
+      body.index = idx; body.count = items.length;
+    }
+    try {
+      fetch('/api/now', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+    } catch (e) {}
+  }
+
   function showItem(item) {
     clearTimeout(timer);
     const back = front === 'A' ? 'B' : 'A';
@@ -235,10 +255,15 @@
     layerIn.appendChild(el);
     layerIn.classList.add('on'); layerOut.classList.remove('on');
     front = back;
+    itemStartedAt = Date.now(); currentItem = item;
     if (item.content.type === 'clock') root.classList.add('full-clock'); else root.classList.remove('full-clock');
     setTimeout(() => { if (front !== layerOut.id) releaseLayer(layerOut); }, 900);
 
     const dur = Number(item.duration) || 0;
+    reportNow(item);
+    if (item.content.type === 'video' && !dur) {
+      el.onloadedmetadata = () => { if (el.duration && isFinite(el.duration)) reportNow(item, Math.round(el.duration)); };
+    }
     if (item.content.type === 'video') {
       // play() ne renvoie pas de promesse sur Internet Explorer 11 et les vieux navigateurs
       const tryPlay = (onFail) => { try { const p = el.play(); if (p && p.catch) p.catch(onFail); } catch (e) { if (onFail) onFail(); } };
@@ -293,13 +318,15 @@
     // un diaporama est déplié en une suite d'images (durée = durée par diapositive)
     items = [];
     (pl ? pl.items : []).forEach(it => {
-      if (it.content.type === 'slides') (it.content.slides || []).forEach(f => items.push({ duration: it.duration, content: { type: 'image', file: f, fit: it.content.fit } }));
+      if (it.content.type === 'slides') (it.content.slides || []).forEach((f, i) => items.push({ duration: it.duration,
+        content: { type: 'image', file: f, fit: it.content.fit }, parentId: it.content.id, slide: i, slides: it.content.slides.length }));
       else items.push(it);
     });
     syncVideoCache(items);
     idx = -1;
     clearTimeout(timer);
     if (!items.length) {
+      currentItem = null; reportNow(null);
       releaseLayer($('A')); releaseLayer($('B')); $('A').classList.remove('on'); $('B').classList.remove('on');
       $('idle').querySelector('.n').textContent = config.screen.name || 'Écran';
       $('idle').style.display = 'flex';
@@ -313,7 +340,9 @@
   setInterval(evaluate, 15000);
 
   function applyConfig(cfg) {
+    const wasLive = liveOn();
     config = cfg;
+    if (cfg.live && cfg.live.now) liveOffset = cfg.live.now - Date.now();
     $('pair').style.display = 'none';
     if ((cfg.screen.orientation || 0) !== orientation || (cfg.screen.margin || 0) !== margin) {
       orientation = cfg.screen.orientation || 0; margin = cfg.screen.margin || 0; layout();
@@ -323,6 +352,7 @@
     showAlert(cfg.alert);
     document.title = (cfg.screen.name || 'Écran') + ' – Affichage';
     evaluate();
+    if (!wasLive && liveOn()) reportNow(currentItem);   // la mosaïque vient de s'ouvrir : signaler tout de suite
   }
 
   function showAlert(a) {
@@ -356,7 +386,7 @@
   try {
     lastCfgStr = store.get('sc_config') || '';
     const cached = JSON.parse(lastCfgStr || 'null');
-    if (cached && cached.type === 'config') applyConfig(cached);   // reprise immédiate, même hors ligne
+    if (cached && cached.type === 'config') { delete cached.live; applyConfig(cached); }   // reprise immédiate, même hors ligne
   } catch (e) {}
 
   let paired = !!config, lastHello = 0;

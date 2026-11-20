@@ -124,6 +124,43 @@
   .colors{display:flex;gap:12px}
   .colors input[type=color]{width:46px;height:34px;border:1px solid var(--line);border-radius:6px;padding:2px;background:#fff}
 
+
+  /* Mosaïque en direct */
+  .lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start}
+  .ltile{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .lscr{position:relative;background:#000;overflow:hidden;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .lscr .lm{position:absolute;inset:0}
+  .lscr .pic{position:absolute;inset:0;background:#000 no-repeat center/contain}
+  .lscr .pic.cover{background-size:cover}
+  .lscr video{width:100%;height:100%;object-fit:contain;display:block}
+  .lscr video.cover{object-fit:cover}
+  .lscr .txt{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:7em 9em;box-sizing:border-box}
+  .lscr .txt .bar{width:12em;height:1.1em;border-radius:1em;margin-bottom:4em}
+  .lscr .txt h1{font-size:9em;line-height:1.05;margin:0 0 .35em;font-weight:800}
+  .lscr .txt p{font-size:4.6em;line-height:1.35;margin:0;opacity:.92;white-space:pre-line}
+  .lscr .clk{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 20%,#28466e,#0b1726 70%)}
+  .lscr .clk .t{font-size:30em;font-weight:200;line-height:1;font-variant-numeric:tabular-nums}
+  .lscr .clk .d{font-size:5.5em;margin-top:.4em;opacity:.9}
+  .lscr .web{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1em;background:#1b2635;text-align:center;padding:4em}
+  .lscr .web b{font-size:14em}
+  .lscr .web span{font-size:4.5em;opacity:.85;word-break:break-all}
+  .lscr .ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4em}
+  .lscr .ov.off{background:rgba(20,24,32,.82);font-size:5em;font-weight:700}
+  .lscr .ov.al{background:#b00020;animation:lpulse 1.6s ease-in-out infinite}
+  .lscr .ov.al.info{background:#e76f00;animation:none}
+  .lscr .ov.al h4{font-size:11em;margin:0 0 .2em;text-transform:uppercase;font-weight:900}
+  .lscr .ov.al p{font-size:5em;margin:0;white-space:pre-line}
+  @keyframes lpulse{50%{background:#7a0016}}
+  .lscr .lclk{position:absolute;top:2.4em;right:2.8em;font-size:3.6em;font-weight:600;padding:.25em .6em;border-radius:.4em;background:rgba(0,0,0,.45);font-variant-numeric:tabular-nums}
+  .lscr .ltick{position:absolute;left:0;right:0;bottom:0;height:7.5em;background:rgba(10,20,40,.92);border-top:.4em solid #f4a261;display:flex;align-items:center;padding:0 2em;overflow:hidden}
+  .lscr .ltick span{font-size:4em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lprog{height:4px;background:var(--soft)}
+  .lprog div{height:100%;background:var(--accent);width:0;transition:width 1s linear}
+  .linfo{padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+  .linfo .nm{font-weight:800;display:flex;align-items:center;gap:8px}
+  .linfo .st{font-size:13px;color:var(--muted)}
+  .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e63946;box-shadow:0 0 0 0 rgba(230,57,70,.6);animation:ldot 1.6s infinite}
+  @keyframes ldot{70%{box-shadow:0 0 0 7px rgba(230,57,70,0)}100%{box-shadow:0 0 0 0 rgba(230,57,70,0)}}
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.2)}
   .toast.err{background:var(--bad)}
   .empty{text-align:center;color:var(--muted);padding:30px}
@@ -170,6 +207,7 @@
   <header>
     <div class="logo"><i></i><span id="brand">Affichage</span></div>
     <nav id="nav">
+      <button data-tab="live">En direct</button>
       <button data-tab="screens">Écrans</button>
       <button data-tab="contents">Contenus</button>
       <button data-tab="playlists">Playlists</button>
@@ -346,18 +384,144 @@
   }
 
   function render() {
+    if (tab !== 'live') stopLive();
     updateNav();
     $('#whoami').textContent = S.me ? S.me.name : '';
     $('#brand').textContent = S.settings.schoolName ? 'Affichage · ' + S.settings.schoolName : 'Affichage';
     document.title = 'Affichage – ' + (S.settings.schoolName || 'Console');
     const m = $('#main');
-    if (tab === 'screens') m.innerHTML = viewScreens();
+    if (tab === 'live') m.innerHTML = viewLive();
+    else if (tab === 'screens') m.innerHTML = viewScreens();
     else if (tab === 'contents') m.innerHTML = viewContents();
     else if (tab === 'playlists') m.innerHTML = viewPlaylists();
     else if (tab === 'alert') m.innerHTML = viewAlert();
     else m.innerHTML = viewSettings();
     bind();
   }
+
+  /* ================= MOSAÏQUE EN DIRECT ================= */
+  let L = null, liveTimer = null, liveClock = null, liveRecv = 0;
+  function viewLive() {
+    return `
+      <div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:16px">
+        <div><h2>En direct</h2><p class="sub" style="margin:0">Ce que diffuse chaque écran en ce moment, mis à jour toutes les 3 secondes.</p></div>
+        <div class="muted" id="liveSum" style="font-size:14px"></div>
+      </div>
+      <div class="lgrid" id="lgrid"><div class="panel empty" style="grid-column:1/-1">Connexion aux écrans…</div></div>
+      <p class="muted" style="font-size:13px;margin-top:16px">Les écrans commencent à signaler leur diffusion quelques secondes après l'ouverture de cette page.
+      Les vignettes reproduisent le contenu diffusé ; ce ne sont pas des captures de l'écran.</p>`;
+  }
+  function stopLive() { clearInterval(liveTimer); clearInterval(liveClock); liveTimer = liveClock = null; }
+  function startLive() {
+    stopLive();
+    pollLive();
+    liveTimer = setInterval(pollLive, 3000);
+    liveClock = setInterval(tickLive, 1000);
+  }
+  async function pollLive() {
+    try { L = await api('POST', '/api/live'); liveRecv = Date.now(); } catch (e) { return; }
+    if (tab !== 'live' || !$('#lgrid')) return stopLive();
+    renderLive();
+  }
+  const serverNow = () => L.now + (Date.now() - liveRecv);
+  const pad2 = n => String(n).padStart(2, '0');
+
+  function liveMedia(c, np) {
+    if (!c) return '<div class="web"><b>?</b><span>Contenu supprimé</span></div>';
+    const fit = c.fit === 'cover' ? ' cover' : '';
+    if (c.type === 'image') return `<div class="pic${fit}" style="background-image:url('${esc(c.file)}')"></div>`;
+    if (c.type === 'slides') {
+      const f = c.slides[Math.min(np.slide || 0, c.slides.length - 1)];
+      return `<div class="pic${fit}" style="background-image:url('${esc(f)}')"></div>`;
+    }
+    if (c.type === 'video') return `<video class="${fit.trim()}" src="${esc(c.file)}" muted autoplay playsinline loop data-start="${np.startedAt}"></video>`;
+    if (c.type === 'text') return `<div class="txt" style="background:${esc(c.bg)};color:${esc(c.fg)}"><div class="bar" style="background:${esc(c.accent)}"></div>${c.title ? `<h1>${esc(c.title)}</h1>` : ''}${c.body ? `<p>${esc(c.body)}</p>` : ''}</div>`;
+    if (c.type === 'clock') return `<div class="clk"><div class="t" data-lt></div><div class="d" data-ld></div></div>`;
+    if (c.type === 'youtube') {
+      const m = String(c.url).match(/(?:youtu\.be\/|v=|embed\/|shorts\/|live\/)([\w-]{11})/);
+      return m ? `<div class="pic cover" style="background-image:url('https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg')"></div>` : '<div class="web"><b>▶</b><span>YouTube</span></div>';
+    }
+    if (c.type === 'web') { let h = c.url; try { h = new URL(c.url).hostname; } catch (e) {} return `<div class="web"><b>🌐</b><span>${esc(h)}</span></div>`; }
+    return '<div class="web"><b>•</b></div>';
+  }
+
+  function liveStatus(x, np, c) {
+    if (!x.online) return 'Hors ligne · vu ' + ago(x.lastSeen);
+    if (!np) return 'En attente du signal de l\'écran…';
+    if (np.state === 'idle') return 'Aucune playlist à diffuser';
+    let t = c ? (TYPES[c.type] || '') + ' « ' + c.name + ' »' : 'Contenu supprimé';
+    if (np.slides) t += ` · diapo ${np.slide + 1}/${np.slides}`;
+    return t;
+  }
+
+  function renderLive() {
+    const grid = $('#lgrid');
+    const on = L.screens.filter(x => x.online).length;
+    $('#liveSum').innerHTML = `<span class="live-dot"></span> ${on} écran${on > 1 ? 's' : ''} en ligne sur ${L.screens.length}`;
+    if (!L.screens.length) { grid.innerHTML = '<div class="panel empty" style="grid-column:1/-1">Aucun écran appairé.</div>'; return; }
+    if (grid.querySelector('.empty')) grid.innerHTML = '';
+    const ids = L.screens.map(x => x.id);
+    grid.querySelectorAll('.ltile').forEach(t => { if (!ids.includes(t.dataset.id)) t.remove(); });
+    L.screens.forEach((x, i) => {
+      let t = grid.querySelector(`.ltile[data-id="${x.id}"]`);
+      if (!t) {
+        t = document.createElement('div'); t.className = 'ltile'; t.dataset.id = x.id;
+        t.innerHTML = `<div class="lscr"><div class="lm"></div><div class="lclk"></div><div class="ltick"><span></span></div><div class="ov off" style="display:none"></div><div class="ov al" style="display:none"><h4></h4><p></p></div></div>
+          <div class="lprog"><div></div></div><div class="linfo"><div class="nm"></div><div class="st"></div></div>`;
+      }
+      if (grid.children[i] !== t) grid.insertBefore(t, grid.children[i] || null);
+      const np = x.now && x.now.state === 'play' ? x.now : null;
+      const c = np ? L.contents.find(k => k.id === np.contentId) : null;
+      const portrait = x.orientation === 90 || x.orientation === 270;
+      const scr = t.querySelector('.lscr');
+      scr.style.aspectRatio = portrait ? '9 / 16' : '16 / 9';
+      scr.style.maxHeight = portrait ? '420px' : '';
+      scr.style.margin = portrait ? '0 auto' : '';
+      // contenu : reconstruit seulement quand il change
+      const key = np ? [np.contentId, np.slide, np.startedAt, c && c.fit].join('|') : (x.now ? 'idle' : 'none');
+      if (t.dataset.key !== key) {
+        t.dataset.key = key;
+        const lm = t.querySelector('.lm');
+        lm.querySelectorAll('video').forEach(v => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} });
+        lm.innerHTML = np ? liveMedia(c, np) : (x.now && x.now.state === 'idle' ? `<div class="web"><span>${esc(x.name)}</span><span style="font-size:3.4em;opacity:.6">Aucune playlist</span></div>` : '');
+        const v = lm.querySelector('video');
+        if (v) v.addEventListener('loadedmetadata', () => { try { if (v.duration) v.currentTime = ((serverNow() - np.startedAt) / 1000) % v.duration; } catch (e) {} });
+      }
+      t.querySelector('.lclk').style.display = x.showClock && !(c && c.type === 'clock') ? '' : 'none';
+      const tk = t.querySelector('.ltick'); tk.style.display = x.ticker ? '' : 'none'; tk.firstElementChild.textContent = x.ticker;
+      const off = t.querySelector('.ov.off');
+      off.style.display = x.online ? 'none' : 'flex'; off.textContent = 'Hors ligne';
+      const al = t.querySelector('.ov.al');
+      if (L.alert && x.online) {
+        al.style.display = 'flex'; al.classList.toggle('info', L.alert.level === 'info');
+        al.querySelector('h4').textContent = L.alert.title; al.querySelector('p').textContent = L.alert.message;
+      } else al.style.display = 'none';
+      t.querySelector('.nm').innerHTML = `${x.online && np ? '<span class="live-dot"></span>' : ''}${esc(x.name)}${x.location ? ` <span class="muted" style="font-weight:400;font-size:13px">· ${esc(x.location)}</span>` : ''}`;
+      t.querySelector('.st').textContent = liveStatus(x, x.now, c);
+      t.dataset.start = np ? np.startedAt : ''; t.dataset.dur = np ? np.duration || 0 : 0;
+      scr.style.fontSize = (Math.min(scr.offsetWidth, scr.offsetHeight) / 100) + 'px';
+    });
+    tickLive();
+  }
+
+  function tickLive() {
+    if (!L || !$('#lgrid')) return;
+    const d = new Date();
+    const hm = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    const date = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    document.querySelectorAll('.ltile').forEach(t => {
+      t.querySelectorAll('.lclk,[data-lt]').forEach(e => { e.textContent = hm; });
+      t.querySelectorAll('[data-ld]').forEach(e => { e.textContent = date.charAt(0).toUpperCase() + date.slice(1); });
+      const bar = t.querySelector('.lprog div'), st = Number(t.dataset.start), du = Number(t.dataset.dur);
+      if (st && du) {
+        const el = (serverNow() - st) / 1000;
+        bar.style.width = Math.min(100, el / du * 100) + '%';
+      } else bar.style.width = st ? '100%' : '0';
+    });
+  }
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.lscr').forEach(scr => { scr.style.fontSize = (Math.min(scr.offsetWidth, scr.offsetHeight) / 100) + 'px'; });
+  });
 
   /* ---------------- Vignettes ---------------- */
   function thumb(c, cls) {
@@ -820,6 +984,7 @@
   /* ================= Liaisons d'événements ================= */
   function bind() {
     const m = $('#main');
+    if (tab === 'live') startLive();
     if (tab === 'screens') {
       renderPending();
       $('#pBtn').onclick = () => run(async () => {

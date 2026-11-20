@@ -140,6 +140,8 @@ function configFor(db: Json, scr: Json) {
       orientation: scr.orientation || 0, margin: scr.margin || 0, ticker: scr.ticker || "", showClock: scr.showClock !== false, cmd: scr.cmd || null,
     },
     playlists, settings: db.settings, alert: db.alert,
+    // mosaïque ouverte dans la console : les écrans signalent ce qu'ils diffusent
+    ...(db.live && db.live.until > Date.now() ? { live: { until: db.live.until, now: Date.now() } } : {}),
   };
 }
 
@@ -216,6 +218,21 @@ export default async (req: Request, context: Context) => {
       const scr = db.screens.find((x: Json) => x.id === r1);
       const cache = { "Netlify-CDN-Cache-Control": "public, durable, s-maxage=30", "Netlify-Cache-Tag": "cfg" };
       return json(scr ? configFor(db, scr) : { type: "unpaired" }, 200, cache);
+    }
+
+    if (r0 === "now" && M === "POST") {
+      const b = await body();
+      if (!isDevice(b.deviceId)) return err("Identifiant d'écran invalide");
+      const t = Date.now();
+      const entry: Json = { at: t, state: b.state === "idle" ? "idle" : "play",
+        startedAt: t - num(b.elapsed, 0, 0, 86400e3) };
+      if (entry.state === "play") {
+        entry.contentId = str(b.contentId, 20); entry.duration = num(b.duration, 0);
+        entry.index = num(b.index, 0, 0, 10000); entry.count = num(b.count, 0, 0, 10000);
+        if (b.slide != null) { entry.slide = num(b.slide, 0, 0, 1000); entry.slides = num(b.slides, 0, 0, 1000); }
+      }
+      await store().setJSON(`now/${b.deviceId}`, entry);
+      return json({ ok: true });
     }
 
     if (r0 === "diag" && M === "POST") {
@@ -301,6 +318,24 @@ export default async (req: Request, context: Context) => {
       const users = await getUsers();
       return json({ settings: db.settings, contents: db.contents, playlists: db.playlists, alert: db.alert, screens, pending,
         me: publicUser(me), users: users.map(publicUser) });
+    }
+
+    /* ---- mosaïque en direct ---- */
+    if (r0 === "live" && M === "POST") {
+      const db = await getDb();
+      const now = Date.now();
+      // prolonge le mode « en direct » par tranches de 10 min (évite de réécrire la config à chaque appel)
+      if (!db.live || db.live.until < now + 5 * 60e3) { db.live = { until: now + 10 * 60e3 }; await saveDb(db); }
+      const screens = await Promise.all(db.screens.map(async (x: Json) => {
+        const [hb, np] = await Promise.all([
+          s.get(`hb/${x.id}`, { type: "json" }) as Promise<Json | null>,
+          s.get(`now/${x.id}`, { type: "json" }) as Promise<Json | null>,
+        ]);
+        return { id: x.id, name: x.name, location: x.location, orientation: x.orientation || 0, ticker: x.ticker || "",
+          showClock: x.showClock !== false, lastSeen: hb?.at || x.pairedAt, online: !!hb && now - hb.at < ONLINE_MS,
+          now: np && now - np.at < 30 * 60e3 ? np : null };
+      }));
+      return json({ now, alert: db.alert, settings: db.settings, contents: db.contents, playlists: db.playlists, screens });
     }
 
     /* ---- écrans ---- */
