@@ -137,7 +137,7 @@ function configFor(db: Json, scr: Json) {
     type: "config",
     screen: {
       id: scr.id, name: scr.name, playlistId: scr.playlistId, schedules: scr.schedules || [],
-      orientation: scr.orientation || 0, margin: scr.margin || 0, ticker: scr.ticker || "", showClock: scr.showClock !== false, cmd: scr.cmd || null,
+      orientation: scr.orientation || 0, margin: scr.margin || 0, fill: scr.fill || "auto", ticker: scr.ticker || "", showClock: scr.showClock !== false, cmd: scr.cmd || null,
     },
     playlists, settings: db.settings, alert: db.alert,
     // mosaïque ouverte dans la console : les écrans signalent ce qu'ils diffusent
@@ -331,7 +331,7 @@ export default async (req: Request, context: Context) => {
           s.get(`hb/${x.id}`, { type: "json" }) as Promise<Json | null>,
           s.get(`now/${x.id}`, { type: "json" }) as Promise<Json | null>,
         ]);
-        return { id: x.id, name: x.name, location: x.location, orientation: x.orientation || 0, ticker: x.ticker || "",
+        return { id: x.id, name: x.name, location: x.location, orientation: x.orientation || 0, ticker: x.ticker || "", fill: x.fill || "auto",
           showClock: x.showClock !== false, lastSeen: hb?.at || x.pairedAt, online: !!hb && now - hb.at < ONLINE_MS,
           now: np && now - np.at < 30 * 60e3 ? np : null };
       }));
@@ -386,6 +386,7 @@ export default async (req: Request, context: Context) => {
         if ("orientation" in b) scr.orientation = [0, 90, 180, 270].includes(Number(b.orientation)) ? Number(b.orientation) : 0;
         if ("ticker" in b) scr.ticker = str(b.ticker, 1000);
         if ("margin" in b) scr.margin = num(b.margin, 0, 0, 10);
+        if ("fill" in b) scr.fill = ["cover", "stretch"].includes(b.fill) ? b.fill : "auto";
         if ("showClock" in b) scr.showClock = !!b.showClock;
         if (Array.isArray(b.schedules)) {
           scr.schedules = b.schedules

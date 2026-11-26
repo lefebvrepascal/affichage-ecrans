@@ -132,6 +132,8 @@
   .lscr .lm{position:absolute;inset:0}
   .lscr .pic{position:absolute;inset:0;background:#000 no-repeat center/contain}
   .lscr .pic.cover{background-size:cover}
+  .lscr .pic.stretch{background-size:100% 100%}
+  .lscr video.stretch{object-fit:fill}
   .lscr video{width:100%;height:100%;object-fit:contain;display:block}
   .lscr video.cover{object-fit:cover}
   .lscr .txt{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:7em 9em;box-sizing:border-box}
@@ -428,7 +430,8 @@
 
   function liveMedia(c, np) {
     if (!c) return '<div class="web"><b>?</b><span>Contenu supprimé</span></div>';
-    const fit = c.fit === 'cover' ? ' cover' : '';
+    const mode = np.fill === 'cover' || np.fill === 'stretch' ? np.fill : (c.fit === 'cover' ? 'cover' : '');
+    const fit = mode ? ' ' + mode : '';
     if (c.type === 'image') return `<div class="pic${fit}" style="background-image:url('${esc(c.file)}')"></div>`;
     if (c.type === 'slides') {
       const f = c.slides[Math.min(np.slide || 0, c.slides.length - 1)];
@@ -478,12 +481,12 @@
       scr.style.maxHeight = portrait ? '420px' : '';
       scr.style.margin = portrait ? '0 auto' : '';
       // contenu : reconstruit seulement quand il change
-      const key = np ? [np.contentId, np.slide, np.startedAt, c && c.fit].join('|') : (x.now ? 'idle' : 'none');
+      const key = np ? [np.contentId, np.slide, np.startedAt, c && c.fit, x.fill].join('|') : (x.now ? 'idle' : 'none');
       if (t.dataset.key !== key) {
         t.dataset.key = key;
         const lm = t.querySelector('.lm');
         lm.querySelectorAll('video').forEach(v => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} });
-        lm.innerHTML = np ? liveMedia(c, np) : (x.now && x.now.state === 'idle' ? `<div class="web"><span>${esc(x.name)}</span><span style="font-size:3.4em;opacity:.6">Aucune playlist</span></div>` : '');
+        lm.innerHTML = np ? liveMedia(c, Object.assign({ fill: x.fill }, np)) : (x.now && x.now.state === 'idle' ? `<div class="web"><span>${esc(x.name)}</span><span style="font-size:3.4em;opacity:.6">Aucune playlist</span></div>` : '');
         const v = lm.querySelector('video');
         if (v) v.addEventListener('loadedmetadata', () => { try { if (v.duration) v.currentTime = ((serverNow() - np.startedAt) / 1000) % v.duration; } catch (e) {} });
       }
@@ -612,6 +615,9 @@
         <label class="f">Playlist par défaut<select class="sPl">${plOptions(s.playlistId, true)}</select></label>
         <label class="f">Marge (si les bords sont coupés)<select class="sMar">
           ${[[0, 'Aucune'], [2, '2 %'], [3, '3 %'], [5, '5 %'], [8, '8 %']].map(([v, l]) => `<option value="${v}" ${(s.margin || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}
+        </select></label>
+        <label class="f">Cadrage des visuels<select class="sFill">
+          ${[['auto', 'Selon chaque contenu'], ['cover', 'Toujours remplir l\'écran (bords recadrés)'], ['stretch', 'Étirer à la taille de l\'écran']].map(([v, l]) => `<option value="${v}" ${(s.fill || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}
         </select></label>
         <label class="f">Orientation<select class="sOr">
           ${[[0, 'Paysage'], [90, 'Portrait (rotation 90°)'], [270, 'Portrait (rotation 270°)'], [180, 'Paysage inversé']].map(([v, l]) => `<option value="${v}" ${s.orientation === v ? 'selected' : ''}>${l}</option>`).join('')}
@@ -969,6 +975,22 @@
         <p class="muted" style="font-size:13px;margin-bottom:0">La personne devra choisir son propre mot de passe à sa première connexion.</p>
       </div>
       <div class="panel">
+        <h3>Plein écran permanent</h3>
+        <p style="margin-top:0">Une page web ne peut pas se mettre en plein écran toute seule au démarrage : c'est le navigateur qu'il faut lancer en <strong>mode kiosque</strong>.
+        Il s'ouvre alors directement en plein écran, sans onglets ni barre d'adresse, et le reste même après un rechargement.</p>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn pri" data-kiosk="edge">Télécharger le lanceur Edge (Windows)</button>
+          <button class="btn" data-kiosk="chrome">Télécharger le lanceur Chrome (Windows)</button>
+        </div>
+        <ol style="margin:0;padding-left:20px;line-height:1.7;font-size:14px">
+          <li><strong>PC Windows branché sur l'écran</strong> : copiez le lanceur sur ce PC et double-cliquez dessus. Pour qu'il démarre avec Windows : <em>Win + R</em>, tapez <code>shell:startup</code>, puis collez-y le fichier.
+            Le navigateur est relancé automatiquement s'il se ferme ou plante. Pour quitter : fermez d'abord la petite fenêtre « Affichage » dans la barre des tâches, puis <em>Alt + F4</em>.</li>
+          <li><strong>Clé Android / Google TV / Fire TV</strong> : <em>Fully Kiosk Browser</em>, Start URL = <code>${o}/</code>, avec « Launch on Boot » et « Keep Screen On ».</li>
+          <li><strong>Chrome sur Android ou TV</strong> : menu ⋮ › <em>Installer l'application</em> (ou <em>Ajouter à l'écran d'accueil</em>) : l'icône « Affichage » ouvre ensuite l'écran directement en plein écran.</li>
+          <li><strong>Sans lanceur</strong> : touche <em>F11</em> sur un PC (le plein écran tient jusqu'au redémarrage du navigateur). Si le plein écran est perdu, l'écran affiche un rappel : un clic ou la touche OK suffit.</li>
+        </ol>
+      </div>
+      <div class="panel">
         <h3>Mettre un écran en service</h3>
         <ol style="margin:0;padding-left:20px;line-height:1.8">
           <li>Connecter l'écran (TV connectée, clé Fire TV / Android TV, mini-PC ou Raspberry Pi) à Internet.</li>
@@ -1019,7 +1041,7 @@
           await api('PUT', '/api/screens/' + id, {
             name: card.querySelector('.sName').value, location: card.querySelector('.sLoc').value,
             playlistId: card.querySelector('.sPl').value || null, orientation: Number(card.querySelector('.sOr').value),
-            margin: Number(card.querySelector('.sMar').value),
+            margin: Number(card.querySelector('.sMar').value), fill: card.querySelector('.sFill').value,
             ticker: card.querySelector('.sTick').value, showClock: card.querySelector('.sClk').checked, schedules
           });
           await refresh();
@@ -1100,6 +1122,33 @@
     }
 
     if (tab === 'settings') {
+      m.querySelectorAll('[data-kiosk]').forEach(b => b.onclick = () => {
+        const edge = b.dataset.kiosk === 'edge';
+        const url = location.origin + '/';
+        const exe = edge ? 'msedge' : 'chrome';
+        const extra = edge ? ' --edge-kiosk-type=fullscreen' : '';
+        // fichier .bat sans accents (invite de commandes Windows), fins de ligne Windows
+        const bat = [
+          '@echo off',
+          'REM Affichage - lance la page ecran en plein ecran permanent (mode kiosque)',
+          'REM et relance le navigateur automatiquement s\'il se ferme ou plante.',
+          'REM Demarrage avec Windows : Win+R, taper shell:startup, coller ce fichier dans le dossier.',
+          'REM Pour quitter : fermer la fenetre "Affichage" (barre des taches) puis Alt+F4.',
+          'if not "%1"=="min" start "Affichage" /min "%~f0" min & exit /b',
+          'title Affichage',
+          'set URL=' + url,
+          ':boucle',
+          'start "" /wait ' + exe + ' --kiosk "%URL%"' + extra + ' --no-first-run --user-data-dir="%LOCALAPPDATA%\\AffichageKiosque-' + exe + '" --autoplay-policy=no-user-gesture-required --disable-session-crashed-bubble --noerrdialogs --overscroll-history-navigation=0',
+          'timeout /t 5 /nobreak >nul',
+          'goto boucle',
+          ''
+        ].join('\r\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([bat], { type: 'application/octet-stream' }));
+        a.download = edge ? 'Affichage plein ecran (Edge).bat' : 'Affichage plein ecran (Chrome).bat';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      });
       $('#setSave').onclick = () => run(async () => { await api('PUT', '/api/settings', { schoolName: $('#setName').value }); await refresh(); }, 'Réglages enregistrés');
       const pws = $('#pwSave');
       if (pws) pws.onclick = () => {

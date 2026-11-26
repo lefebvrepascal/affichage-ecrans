@@ -38,9 +38,26 @@
 
   /* ---------- Plein écran ---------- */
   if (!PREVIEW) document.body.classList.add('kiosk');
+  // Plein écran « navigateur » (F11, mode kiosque, appli installée) ou plein écran demandé par la page
+  function apiFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement); }
+  function isFullscreen() {
+    return apiFullscreen() || (window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
+  }
+  function checkFullscreen() {
+    if (PREVIEW) return;
+    const fs = isFullscreen();
+    if (fs) store.set('sc_fs', '1');
+    // l'écran a déjà été en plein écran : on affiche un rappel discret tant qu'il ne l'est plus
+    $('fsback').style.display = !fs && store.get('sc_fs') ? 'block' : 'none';
+  }
+  ['fullscreenchange', 'webkitfullscreenchange', 'MSFullscreenChange', 'resize'].forEach(ev =>
+    document.addEventListener(ev, () => setTimeout(checkFullscreen, 300)));
+  window.addEventListener('resize', () => setTimeout(checkFullscreen, 300));
+  setInterval(checkFullscreen, 5000);
+
   function goFullscreen() {
     const el = document.documentElement;
-    if (document.fullscreenElement || document.webkitFullscreenElement) return;
+    if (apiFullscreen()) return;
     try {
       const r = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen ? el.webkitRequestFullscreen()
         : el.msRequestFullscreen ? el.msRequestFullscreen() : null;
@@ -48,7 +65,9 @@
     } catch (e) {}
   }
   document.addEventListener('click', goFullscreen);
-  document.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ' || e.keyCode === 13 || e.keyCode === 32) goFullscreen(); });
+  document.addEventListener('touchend', goFullscreen);
+  // n'importe quelle touche de la télécommande ou du clavier rétablit le plein écran
+  document.addEventListener('keydown', e => { if (e.key !== 'Escape' && e.keyCode !== 27) goFullscreen(); });
   setTimeout(() => { $('hint').style.opacity = 0; }, 8000);
 
   /* ---------- Taille / orientation ---------- */
@@ -115,11 +134,19 @@
   /* ---------- Lecture ---------- */
   let config = null, items = [], idx = -1, timer = null, sig = '', front = 'A';
 
+  // Cadrage : réglage de l'écran (remplir / étirer) ou, à défaut, celui de chaque contenu
+  function screenFill(c) {
+    const f = config && config.screen && config.screen.fill;
+    if (f === 'cover' || f === 'stretch') return f;
+    return c.fit === 'cover' ? 'cover' : 'contain';
+  }
+
   function render(content) {
     const c = content;
     if (c.type === 'image') {
       const pic = document.createElement('div');
-      pic.className = 'pic' + (c.fit === 'cover' ? ' cover' : '');
+      const fill = screenFill(c);
+      pic.className = 'pic' + (fill === 'cover' ? ' cover' : fill === 'stretch' ? ' stretch' : '');
       pic.setAttribute('data-src', c.file);
       pic.style.backgroundImage = 'url("' + c.file + '")';
       const probe = new Image();   // détecte une image introuvable pour passer à la suivante
@@ -131,7 +158,8 @@
       const v = document.createElement('video');
       v.src = videoSrc(c.file); v.autoplay = true; v.playsInline = true; v.muted = c.muted !== false;
       v.setAttribute('playsinline', ''); if (v.muted) v.setAttribute('muted', '');
-      if (c.fit === 'cover') v.className = 'cover';
+      const vf = screenFill(c);
+      if (vf !== 'contain') v.className = vf;
       return v;
     }
     if (c.type === 'text') {
@@ -162,7 +190,8 @@
   }
 
   /* ---------- Mémoire : libération des médias, cache vidéo, rechargement de sécurité ---------- */
-  const bootedAt = Date.now();
+  let bootedAt = Date.now();
+  const BUILD = document.documentElement.getAttribute('data-build') || '';
   const RELOAD_EVERY = 6 * 3600 * 1000;          // rechargement préventif toutes les 6 h
   let lastReloadTry = 0;
 
@@ -223,7 +252,25 @@
   function safeReload() {
     if (PREVIEW || Date.now() - lastReloadTry < 5 * 60 * 1000) return;
     lastReloadTry = Date.now();
-    fetch('/?v=' + Date.now(), { cache: 'no-store' }).then(r => { if (r.ok) location.reload(); }).catch(() => {});
+    fetch('/?v=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : null).then(html => {
+      if (!html) return;                                   // serveur injoignable : on ne touche à rien
+      const m = /data-build="([^"]+)"/.exec(html);
+      const sameVersion = m && BUILD && m[1] === BUILD;
+      // Un rechargement complet ferait sortir du plein écran demandé par la page : si la version
+      // n'a pas changé, on remet simplement la diffusion à zéro (même effet sur la mémoire).
+      if (sameVersion && apiFullscreen()) softReset();
+      else location.reload();
+    }).catch(() => {});
+  }
+  function softReset() {
+    bootedAt = Date.now();
+    Object.keys(videoCache).forEach(f => {
+      if (videoCache[f].url) { try { URL.revokeObjectURL(videoCache[f].url); } catch (e) {} }
+      delete videoCache[f];
+    });
+    releaseLayer($('A')); releaseLayer($('B'));
+    sig = '';
+    evaluate();
   }
 
   /* ---------- Mode « en direct » : l'écran signale ce qu'il diffuse quand la mosaïque est ouverte ---------- */
@@ -312,7 +359,7 @@
     if (!config) return;
     const pid = activePlaylistId(config);
     const pl = pid && config.playlists[pid];
-    const newSig = pl ? JSON.stringify(pl) : 'none';
+    const newSig = (pl ? JSON.stringify(pl) : 'none') + '|' + (config.screen.fill || '');
     if (newSig === sig) return;
     sig = newSig;
     // un diaporama est déplié en une suite d'images (durée = durée par diapositive)

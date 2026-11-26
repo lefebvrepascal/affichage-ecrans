@@ -17,3 +17,8 @@
 # Bouton « Deploy to Netlify » : variable demandée lors de l'installation
 [template.environment]
   SETUP_CODE = "Code secret exigé pour créer le premier compte administrateur (conservez-le)"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json; charset=utf-8"

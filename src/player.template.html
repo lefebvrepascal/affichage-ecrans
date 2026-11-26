@@ -1,8 +1,12 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-build="__BUILD__">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="/manifest.webmanifest">
 <title>Affichage – Écran</title>
 <style>
 /*CSS*/
@@ -25,6 +29,7 @@
   <div id="net" title="Connexion au serveur perdue"></div>
 </div>
 <div id="hint">Cliquez ou appuyez sur OK pour passer en plein écran</div>
+<div id="fsback">Plein écran perdu — cliquez ou appuyez sur OK pour le rétablir</div>
 
 <script>
 /*JS*/

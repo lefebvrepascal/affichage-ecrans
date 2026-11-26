@@ -12,6 +12,7 @@ import babel from "@babel/core";
 import postcss from "postcss";
 import autoprefixer from "autoprefixer";
 import { minify } from "terser";
+import { createHash } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -38,8 +39,10 @@ const polyfills = [
 
 const js = (await minify(polyfills + "\n;\n" + app, { ecma: 5, safari10: true, compress: { passes: 1 }, mangle: true })).code;
 
+const build = createHash("sha256").update(css + app).digest("hex").slice(0, 12);
 const html = fs.readFileSync(src("player.template.html"), "utf8")
   .replace("/*CSS*/", () => css)
-  .replace("/*JS*/", () => js);
+  .replace("/*JS*/", () => js)
+  .replace("__BUILD__", build);
 fs.writeFileSync(path.join(here, "..", "public", "index.html"), html);
 console.log(`Lecteur construit : public/index.html (${(html.length / 1024).toFixed(0)} Ko)`);

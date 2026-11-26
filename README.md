@@ -67,6 +67,8 @@ Sans le bouton : *Project configuration › Environment variables* › ajouter `
 4. OK sur la télécommande (ou un clic) pour passer en plein écran.
 5. Si l'heure ou le bandeau sont coupés sur les bords : réglage **Marge** à 3 %.
 
+**Plein écran permanent :** une page web ne peut pas se mettre en plein écran seule au démarrage. Sur un PC Windows, téléchargez le **lanceur Edge ou Chrome** dans la console (*Réglages & aide › Plein écran permanent*) : il ouvre l'écran en mode kiosque, le relance s'il se ferme, et peut démarrer avec Windows. Sur Chrome Android/TV : menu ⋮ › *Installer l'application*. Si le plein écran est perdu, l'écran affiche un rappel : un clic ou la touche OK suffit. Le réglage **Cadrage des visuels** de chaque écran permet de toujours remplir l'écran (sans bandes noires).
+
 **Fire TV :** navigateur *Silk* (simple) ou *Fully Kiosk Browser* installé via l'appli *Downloader* (recommandé : démarrage automatique, écran toujours allumé).
 **Android TV / Google TV :** *Fully Kiosk Browser* depuis le Play Store.
 **TV avec navigateur intégré :** la page écran est compatible avec les navigateurs anciens des TV.
